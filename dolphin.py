@@ -1,10 +1,10 @@
 from socket import *
-serverName = "192.168.1.2"
-serverPort = 12000
-clientSocket = socket(AF_INET, SOCK_STREAM)
-clientSocket.connect((serverName, serverPort))
+HOST = "192.168.1.2"
+PORT = 12000
+s = socket(AF_INET, SOCK_STREAM)
+s.connect((HOST, PORT))
 messagetoserver = input("Enter Message for Server: ")
-clientSocket.send(messagetoserver)
-replyfromserver = clientSocket.recv(1024)
+s.send(messagetoserver)
+replyfromserver = s.recv(1024)
 print ("Reply Message from Server: ", replyfromserver)
-clientSocket.close()
+s.close()
