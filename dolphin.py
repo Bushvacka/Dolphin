@@ -2,11 +2,10 @@
 # Author: Troy Dutton
 # Date Modfied: August 1, 2022
 
-from math import dist
 from socket import *
 import select
 import RPi.GPIO as gpio
-import time
+import time, sys
 
 HOST = "192.168.0.27"
 PORT = 12000
@@ -46,6 +45,10 @@ def measureDistance():
         time.sleep(0.00001)
         gpio.output(trig, gpio.LOW)
 
+        # Wait for low signal on input
+        while (gpio.input(echo)):
+            pass
+        
         # Start timer and wait for signal to be recieved
         start_t = time.perf_counter()
         gpio.wait_for_edge(echo, gpio.RISING)
@@ -56,6 +59,14 @@ def measureDistance():
         distances.append(distance)
     return distances
 
+def setMotorDirection(dir):
+    if (dir == "W"):
+        for dir_pin in MOTOR_DIR_PINS:
+            gpio.output(dir_pin, gpio.HIGH)
+    if (dir == "S"):
+        for dir_pin in MOTOR_DIR_PINS:
+            gpio.output(dir_pin, gpio.LOW)
+
 
 
 def main():
@@ -65,9 +76,17 @@ def main():
     while True:
         r, w, e = select.select([server_socket], [], [], .01)
         if (r): # If there is data available
-            print(server_socket.recv(1024).decode())
+            msg = server_socket.recv(1024).decode()
+            print(f"Message Recieved: {msg}")
+            setMotorDirection(msg)
+            print(f"Sensor Distance: {measureDistance()}")
+
 
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        gpio.cleanup()
+        sys.exit(0)
