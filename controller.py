@@ -1,34 +1,37 @@
 # Controller.py
 # Author: Troy Dutton
-# Date Modfied: July 30, 2022
+# Date Modfied: August 1, 2022
+
 from socket import *
+import select
 import pygame, sys, time, math
+
 PORT = 12000
 FPS_CAP = 60
 SCAN_COLOR = (0, 255, 0)
 DOLPHIN_COLOR = (0, 0, 255)
 
-#def sendMessage(msg):
-#    dolphin_socket.send(msg.encode())
+def displayInit():
+    # Initialize pygame
+    pygame.init()
+    pygame.font.init()
 
-#def readMessage():
-#    msg = dolphin_socket.recv(1024).decode()
-#    return msg
+    # Initialize display
+    w = pygame.display.Info().current_w if pygame.display.Info().current_w <= 1920 else 1920
+    h = pygame.display.Info().current_h if pygame.display.Info().current_h <= 1080 else 1080
+    screen = pygame.display.set_mode((w, h))
+    pygame.display.set_caption("Dolphin")
+    return (screen, w, h)
 
-#def distanceToCoords(distance):
-#    x = dolphin[0] + distance*math.cos(math.radians(dolphin_angle)) + w/2
-#    y = dolphin[1] + distance*math.sin(math.radians(dolphin_angle)) + h/2
-#    return (x, y)
-
-def drawScan():
+def drawScan(screen, w, h, camera, scan):
     """Draw up-to-date scan information to the screen"""
     for point in scan:
         # Adjust for camera position
-        x = point[0] - camera[0]
-        y = point[1] - camera[1]
+        x = point[0] - camera[0] + w/2
+        y = point[1] - camera[1] + h/2
         pygame.draw.circle(screen, SCAN_COLOR, (x, y), 7)
 
-def drawDolphin():
+def drawDolphin(screen, w, h, camera, dolphin, dolphin_angle):
     """Indicate the position and direction of the dolphin"""
     x = dolphin[0] - camera[0] + w/2
     y = dolphin[1] - camera[1] + h/2
@@ -43,73 +46,86 @@ def drawDolphin():
     dolphin_rect = rotated_surface.get_rect(center = dolphin_surface.get_rect().center)
     screen.blit(rotated_surface, (dolphin_rect[0] + x - 25, dolphin_rect[1] + y - 10))
 
-def updateDisplay():
+def updateDisplay(screen, w, h, camera, scan, dolphin, dolphin_angle):
     """Draw to and refresh the display"""
     screen.fill((0, 0, 0)) # Clear display
-    drawScan()
-    drawDolphin()
+    drawScan(screen, w, h, camera, scan)
+    drawDolphin(screen, w, h, camera, dolphin, dolphin_angle)
     pygame.display.update() # Push changes to the screen
 
-# Initialize pygame
-pygame.init()
-pygame.font.init()
 
-# Initialize display
-w = pygame.display.Info().current_w if pygame.display.Info().current_w <= 1920 else 1920
-h = pygame.display.Info().current_h if pygame.display.Info().current_h <= 1080 else 1080
-screen = pygame.display.set_mode((w, h))
-pygame.display.set_caption("Dolphin")
+def wifiInit():
+    # Connect to dolphin
+    s = socket(AF_INET, SOCK_STREAM)
+    s.bind(('', PORT))
+    s.listen(1)
+    dolphin_socket, addr = s.accept()
+    return dolphin_socket
 
-# Connect to dolphin
-#s = socket(AF_INET, SOCK_STREAM)
-#s.bind(('', PORT))
-#s.listen(1)
-#dolphin_socket, addr = s.accept()
+def main():
+    screen, w, h = displayInit()
+    #dolphin_socket = wifiInit()
 
-camera = [0, 0]
-camera_drag = False
-last_update = 0
-last_frame = 0
+    # Position information
+    dolphin = [0, 0]
+    dolphin_angle = 0
+    scan = []
 
-dolphin = [0, 0]
-dolphin_angle = 0
-scan = []
+    # Display information
+    camera = [0, 0]
+    camera_drag = False
 
-while True:
-    # Check for new events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            sys.exit()
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if pygame.mouse.get_pressed()[0]:
-                camera_drag = True
-        elif event.type == pygame.MOUSEBUTTONUP:
-            if pygame.mouse.get_pressed()[0] == False:
-                camera_drag = False
-        elif event.type == pygame.MOUSEMOTION:
-            if camera_drag: # Update camera position
-                camera = [old - change for (old, change) in zip(camera, list(pygame.mouse.get_rel()))]
-            else: # Clear motion from queue
-                pygame.mouse.get_rel()
+    # Timing 
+    last_update = 0
+    last_frame = 0
 
-    # Check for keypresses
-    if (int(round(time.time() * 1000)) - last_update) > 25:
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_a]:
-            dolphin_angle += 1
-        if keys[pygame.K_d]:
-            dolphin_angle -= 1
-        if keys[pygame.K_w]:
-            dolphin[0] += math.cos(math.radians(dolphin_angle))
-            dolphin[1] -= math.sin(math.radians(dolphin_angle))
-        if keys[pygame.K_s]:
-            dolphin[0] -= math.cos(math.radians(dolphin_angle))
-            dolphin[1] += math.sin(math.radians(dolphin_angle))
-        
+    while True:
+        # Check for new events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if pygame.mouse.get_pressed()[0]:
+                    camera_drag = True
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if pygame.mouse.get_pressed()[0] == False:
+                    camera_drag = False
+            elif event.type == pygame.MOUSEMOTION:
+                if camera_drag: # Update camera position
+                    camera = [old - change for (old, change) in zip(camera, list(pygame.mouse.get_rel()))]
+                else: # Clear motion from queue
+                    pygame.mouse.get_rel()
 
-        last_update = int(round(time.time() * 1000))
-    
-    # Update Display
-    if (int(round(time.time() * 1000)) - last_frame) > (1000/FPS_CAP):
-        updateDisplay()
-        last_frame = int(round(time.time() * 1000))
+        # Check for keypresses
+        if (int(round(time.time() * 1000)) - last_update) > 25:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_a]:
+                #dolphin_socket.send("A".encode())
+                dolphin_angle += 1
+            if keys[pygame.K_d]:
+                #dolphin_socket.send("D".encode())
+                dolphin_angle -= 1
+            if keys[pygame.K_w]:
+                #dolphin_socket.send("W".encode())
+                dolphin[0] += math.cos(math.radians(dolphin_angle))
+                dolphin[1] -= math.sin(math.radians(dolphin_angle))
+            if keys[pygame.K_s]:
+                #dolphin_socket.send("S".encode())
+                dolphin[0] -= math.cos(math.radians(dolphin_angle))
+                dolphin[1] += math.sin(math.radians(dolphin_angle))
+            
+
+            last_update = int(round(time.time() * 1000))
+
+        #r, w, e = select.select([dolphin_socket], [], [], .01)
+        #if (r): # If there is data available
+            #print(dolphin_socket.recv(1024).decode())
+            
+        # Update Display
+        if (int(round(time.time() * 1000)) - last_frame) > (1000/FPS_CAP):
+            updateDisplay(screen, w, h, camera, scan, dolphin, dolphin_angle)
+            last_frame = int(round(time.time() * 1000))
+
+
+if __name__ == "__main__":
+    main()
