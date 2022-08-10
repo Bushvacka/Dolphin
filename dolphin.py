@@ -20,7 +20,11 @@ MOTOR_STEP_PINS = []
 
 AIN1 = 7
 AIN2 = 8
-PWA = 12
+PWA = 10
+
+BIN1 = 11
+BIN2 = 12
+PWB = 14
 
 FREQ = 500
 DUTY_CYCLE = 50
@@ -74,15 +78,15 @@ def measureDistance():
         distances.append(distance)
     return distances
 
-def setMotorDirection(task):
-    GPIO.output(AIN1, task[0])
-    GPIO.output(AIN2, task[1])
+def setMotorDirection(dirs):
+    GPIO.output(AIN1, dirs[0])
+    GPIO.output(AIN2, dirs[1])
 
 def generateTask(cmd):
     if (cmd == "W"):
-        task = [[HIGH, LOW], time.time(), 0.5]
+        task = [[HIGH, LOW], time.time()]
     elif (cmd == "S"):
-        task = [[LOW, HIGH], time.time(), 0.5]
+        task = [[LOW, HIGH], time.time()]
     return task
     
 
@@ -94,9 +98,14 @@ def main():
     while True:
         # End any out-of-time tasks
         if len(tasks) > 0:
-            if (time.time() - tasks[1]) > tasks[2]:
-                del(tasks[0])
-                pwm.stop()
+            if (time.time() - tasks[0][1]) > 0.5:
+                tasks.pop(0)
+                # Check if there are any more tasks
+                if len(tasks) > 0:
+                    setMotorDirection(tasks[0][0])
+                    tasks[0][1] = time.time() # Update start time
+                else:
+                    pwm.stop()
         
         # Check for commands
         r, w, e = select.select([server_socket], [], [], .01)
@@ -104,9 +113,10 @@ def main():
             cmd = server_socket.recv(1024).decode()
             tasks.append(generateTask(cmd))
             if len(tasks) == 1:
-                setMotorDirection(tasks[0])
+                setMotorDirection(tasks[0][0])
                 pwm.start(DUTY_CYCLE)
             print(f"Message Recieved: {cmd}")
+            print(f"Tasks: {tasks}")
 
 
 if __name__ == "__main__":
