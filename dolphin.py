@@ -4,7 +4,9 @@
 
 from socket import *
 import select
-import RPi.GPIO as gpio
+import RPi.GPIO as GPIO
+import GPIO.LOW as LOW
+import GPIO.HIGH as HIGH
 import time, sys
 
 HOST = "192.168.0.27"
@@ -14,46 +16,53 @@ ULTRASONIC_OUT_PINS = [3]
 ULTRASONIC_IN_PINS = [5]
 MOTOR_DIR_PINS = []
 MOTOR_STEP_PINS = []
-LOW = gpio.LOW
-HIGH = gpio.HIGH
+
+# TODO Remove
+
+AIN1 = 7
+AIN2 = 8
+PWA = 12
+
+FREQ = 500
+dc = 50
 
 def wifiInit():
     server_socket = socket(AF_INET, SOCK_STREAM)
     server_socket.connect((HOST, PORT))
     return server_socket
 
-def gpioInit():
-    gpio.setmode(gpio.BOARD)
+def GPIOInit():
+    GPIO.setmode(GPIO.BOARD)
 
     # Setup ultrasonic sensors
     for pin in ULTRASONIC_OUT_PINS:
-        gpio.setup(pin, gpio.OUT)
+        GPIO.setup(pin, GPIO.OUT)
     
     for pin in ULTRASONIC_IN_PINS:
-        gpio.setup(pin, gpio.IN)
+        GPIO.setup(pin, GPIO.IN)
 
-    # Setup stepper motors
+    # Setup motors
     for pin in MOTOR_DIR_PINS:
-        gpio.setup(pin, gpio.OUT)
+        GPIO.setup(pin, GPIO.OUT)
     
     for pin in MOTOR_STEP_PINS:
-        gpio.setup(pin, gpio.OUT)
+        GPIO.setup(pin, GPIO.OUT)
 
 def measureDistance():
     distances = []
     for trig, echo in zip(ULTRASONIC_OUT_PINS, ULTRASONIC_IN_PINS):
         # Pulse trigger pin
-        gpio.output(trig, HIGH)
+        GPIO.output(trig, HIGH)
         time.sleep(0.00001)
-        gpio.output(trig, LOW)
+        GPIO.output(trig, LOW)
 
         # Wait for low signal on input
-        while (gpio.input(echo)):
+        while (GPIO.input(echo)):
             pass
         
         # Start timer and wait for signal to be recieved
         start_t = time.perf_counter()
-        gpio.wait_for_edge(echo, gpio.RISING)
+        GPIO.wait_for_edge(echo, GPIO.RISING)
 
         # Stop timer and calculate distance traveled (cm)
         elapsed_t = time.perf_counter() - start_t
@@ -63,11 +72,12 @@ def measureDistance():
 
 def setMotorDirection(dir):
     if (dir == "W"):
-        for dir_pin in MOTOR_DIR_PINS:
-            gpio.output(dir_pin, HIGH)
+        for motor_pins in MOTOR_DIR_PINS:
+            GPIO.output(motor_pins[0], HIGH)
+            GPIO.output(motor_pins[1], LOW)
     elif (dir == "S"):
         for dir_pin in MOTOR_DIR_PINS:
-            gpio.output(dir_pin, LOW)
+            GPIO.output(dir_pin, LOW)
     elif (dir == "A"):
         MOTOR_DIR_PINS[0] = LOW
         MOTOR_DIR_PINS[1] = HIGH
@@ -77,48 +87,35 @@ def setMotorDirection(dir):
     
 
 def main():
-    gpioInit()
+    #GPIOInit()
     server_socket = wifiInit()
 
     while True:
+        # TODO Remove
+        GPIO.setup(AIN1, GPIO.OUTPUT)
+        GPIO.setup(AIN2, GPIO.OUTPUT)
+        GPIO.setup(PWA, GPIO.OUTPUT)
+
+        pwm = GPIO.PWM(PWA, FREQ)
+        pwm.start(dc)
+
+        GPIO.output(AIN1, LOW)
+        GPIO.output(AIN2, HIGH)
+
         r, w, e = select.select([server_socket], [], [], .01)
         if (r): # If there is data available
             msg = server_socket.recv(1024).decode()
             print(f"Message Recieved: {msg}")
-            setMotorDirection(msg)
-            print(f"Sensor Distance: {measureDistance()}")
+            if msg == "W":
+                dc += 5
+            elif msg == "S":
+                dc -= 5
+            pwm.ChangeDutyCycle(dc)
 
 
-
-# TODO Remove
-AIN1 = 7
-AIN2 = 8
-PWA = 10
-
-FREQ = 100
-DUTY_CYCLE = 50
 if __name__ == "__main__":
     try:
-        # TODO Remove
-        gpio.setup(AIN1, gpio.OUTPUT)
-        gpio.setup(AIN2, gpio.OUTPUT)
-        gpio.setup(PWA, gpio.OUTPUT)
-
-        pwm = gpio.PWM(PWA, FREQ)
-        pwm.start(DUTY_CYCLE)
-
-        gpio.output(AIN1, LOW)
-        gpio.output(AIN2, HIGH)
-
-        while True:
-            time.sleep(2)
-            gpio.output(AIN1, HIGH)
-            gpio.output(AIN2, LOW)
-            time.sleep(2)
-            gpio.output(AIN1, LOW)
-            gpio.output(AIN2, HIGH)
-
-        # main()
+        main()
     except KeyboardInterrupt:
-        gpio.cleanup()
+        GPIO.cleanup()
         sys.exit(0)
