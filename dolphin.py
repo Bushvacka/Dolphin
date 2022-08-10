@@ -5,8 +5,7 @@
 from socket import *
 import select
 import RPi.GPIO as GPIO
-import GPIO.LOW as LOW
-import GPIO.HIGH as HIGH
+from RPi.GPIO import LOW, HIGH
 import time, sys
 
 HOST = "192.168.0.27"
@@ -24,7 +23,7 @@ AIN2 = 8
 PWA = 12
 
 FREQ = 500
-dc = 50
+DUTY_CYCLE = 50
 
 def wifiInit():
     server_socket = socket(AF_INET, SOCK_STREAM)
@@ -47,6 +46,11 @@ def GPIOInit():
     
     for pin in MOTOR_STEP_PINS:
         GPIO.setup(pin, GPIO.OUT)
+        
+    GPIO.setup(AIN1, GPIO.OUT)    
+    GPIO.setup(AIN2, GPIO.OUT)
+    GPIO.setup(PWA, GPIO.OUT)
+    return GPIO.PWM(PWA, FREQ)
 
 def measureDistance():
     distances = []
@@ -72,45 +76,24 @@ def measureDistance():
 
 def setMotorDirection(dir):
     if (dir == "W"):
-        for motor_pins in MOTOR_DIR_PINS:
-            GPIO.output(motor_pins[0], HIGH)
-            GPIO.output(motor_pins[1], LOW)
+        GPIO.output(AIN1, HIGH)
+        GPIO.output(AIN2, LOW)
     elif (dir == "S"):
-        for dir_pin in MOTOR_DIR_PINS:
-            GPIO.output(dir_pin, LOW)
-    elif (dir == "A"):
-        MOTOR_DIR_PINS[0] = LOW
-        MOTOR_DIR_PINS[1] = HIGH
-    elif (dir == "D"):
-        MOTOR_DIR_PINS[0] = HIGH
-        MOTOR_DIR_PINS[1] = LOW
+        GPIO.output(AIN1, LOW)
+        GPIO.output(AIN2, HIGH)
     
 
 def main():
-    #GPIOInit()
+    pwm = GPIOInit()    
     server_socket = wifiInit()
+    tasks = []
 
     while True:
-        # TODO Remove
-        GPIO.setup(AIN1, GPIO.OUTPUT)
-        GPIO.setup(AIN2, GPIO.OUTPUT)
-        GPIO.setup(PWA, GPIO.OUTPUT)
-
-        pwm = GPIO.PWM(PWA, FREQ)
-        pwm.start(dc)
-
-        GPIO.output(AIN1, LOW)
-        GPIO.output(AIN2, HIGH)
-
         r, w, e = select.select([server_socket], [], [], .01)
         if (r): # If there is data available
-            msg = server_socket.recv(1024).decode()
-            print(f"Message Recieved: {msg}")
-            if msg == "W":
-                dc += 5
-            elif msg == "S":
-                dc -= 5
-            pwm.ChangeDutyCycle(dc)
+            cmd = server_socket.recv(1024).decode()
+            if tasks.
+            print(f"Message Recieved: {cmd}")
 
 
 if __name__ == "__main__":
