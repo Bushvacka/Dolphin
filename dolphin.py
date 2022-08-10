@@ -74,13 +74,16 @@ def measureDistance():
         distances.append(distance)
     return distances
 
-def setMotorDirection(dir):
-    if (dir == "W"):
-        GPIO.output(AIN1, HIGH)
-        GPIO.output(AIN2, LOW)
-    elif (dir == "S"):
-        GPIO.output(AIN1, LOW)
-        GPIO.output(AIN2, HIGH)
+def setMotorDirection(task):
+    GPIO.output(AIN1, task[0])
+    GPIO.output(AIN2, task[1])
+
+def generateTask(cmd):
+    if (cmd == "W"):
+        task = [[HIGH, LOW], time.time(), 0.5]
+    elif (cmd == "S"):
+        task = [[LOW, HIGH], time.time(), 0.5]
+    return task
     
 
 def main():
@@ -89,10 +92,20 @@ def main():
     tasks = []
 
     while True:
+        # End any out-of-time tasks
+        if len(tasks) > 0:
+            if (time.time() - tasks[1]) > tasks[2]:
+                del(tasks[0])
+                pwm.stop()
+        
+        # Check for commands
         r, w, e = select.select([server_socket], [], [], .01)
         if (r): # If there is data available
             cmd = server_socket.recv(1024).decode()
-            if tasks.
+            tasks.append(generateTask(cmd))
+            if len(tasks) == 1:
+                setMotorDirection(tasks[0])
+                pwm.start(DUTY_CYCLE)
             print(f"Message Recieved: {cmd}")
 
 
