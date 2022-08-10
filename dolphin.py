@@ -10,10 +10,12 @@ import time, sys
 HOST = "192.168.0.27"
 PORT = 12000
 SPEED_OF_SOUND = 34300
-ULTRASONIC_OUT_PINS = [15]
-ULTRASONIC_IN_PINS = [13]
+ULTRASONIC_OUT_PINS = [3]
+ULTRASONIC_IN_PINS = [5]
 MOTOR_DIR_PINS = []
 MOTOR_STEP_PINS = []
+LOW = gpio.LOW
+HIGH = gpio.HIGH
 
 def wifiInit():
     server_socket = socket(AF_INET, SOCK_STREAM)
@@ -41,9 +43,9 @@ def measureDistance():
     distances = []
     for trig, echo in zip(ULTRASONIC_OUT_PINS, ULTRASONIC_IN_PINS):
         # Pulse trigger pin
-        gpio.output(trig, gpio.HIGH)
+        gpio.output(trig, HIGH)
         time.sleep(0.00001)
-        gpio.output(trig, gpio.LOW)
+        gpio.output(trig, LOW)
 
         # Wait for low signal on input
         while (gpio.input(echo)):
@@ -62,12 +64,17 @@ def measureDistance():
 def setMotorDirection(dir):
     if (dir == "W"):
         for dir_pin in MOTOR_DIR_PINS:
-            gpio.output(dir_pin, gpio.HIGH)
-    if (dir == "S"):
+            gpio.output(dir_pin, HIGH)
+    elif (dir == "S"):
         for dir_pin in MOTOR_DIR_PINS:
-            gpio.output(dir_pin, gpio.LOW)
-
-
+            gpio.output(dir_pin, LOW)
+    elif (dir == "A"):
+        MOTOR_DIR_PINS[0] = LOW
+        MOTOR_DIR_PINS[1] = HIGH
+    elif (dir == "D"):
+        MOTOR_DIR_PINS[0] = HIGH
+        MOTOR_DIR_PINS[1] = LOW
+    
 
 def main():
     gpioInit()
@@ -83,10 +90,35 @@ def main():
 
 
 
+# TODO Remove
+AIN1 = 7
+AIN2 = 8
+PWA = 10
 
+FREQ = 100
+DUTY_CYCLE = 50
 if __name__ == "__main__":
     try:
-        main()
+        # TODO Remove
+        gpio.setup(AIN1, gpio.OUTPUT)
+        gpio.setup(AIN2, gpio.OUTPUT)
+        gpio.setup(PWA, gpio.OUTPUT)
+
+        pwm = gpio.PWM(PWA, FREQ)
+        pwm.start(DUTY_CYCLE)
+
+        gpio.output(AIN1, LOW)
+        gpio.output(AIN2, HIGH)
+
+        while True:
+            time.sleep(2)
+            gpio.output(AIN1, HIGH)
+            gpio.output(AIN2, LOW)
+            time.sleep(2)
+            gpio.output(AIN1, LOW)
+            gpio.output(AIN2, HIGH)
+
+        # main()
     except KeyboardInterrupt:
         gpio.cleanup()
         sys.exit(0)
