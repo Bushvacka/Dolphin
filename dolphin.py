@@ -2,11 +2,12 @@
 # Author: Troy Dutton
 # Date Modfied: August 10, 2022
 
+from http import server
 from socket import *
 import select
 import RPi.GPIO as GPIO
 from RPi.GPIO import LOW, HIGH
-import time, sys
+import time, sys, math
 
 HOST = "192.168.0.27"
 PORT = 12000
@@ -54,10 +55,13 @@ def GPIOInit():
     GPIO.setup(AIN1, GPIO.OUT)    
     GPIO.setup(AIN2, GPIO.OUT)
     GPIO.setup(PWA, GPIO.OUT)
-    return GPIO.PWM(PWA, FREQ)
+
+    GPIO.setup(BIN1, GPIO.OUT)    
+    GPIO.setup(BIN2, GPIO.OUT)
+    GPIO.setup(PWB, GPIO.OUT)
+    return [GPIO.PWM(PWA, FREQ), GPIO.PWM(PWA, FREQ)]
 
 def measureDistance():
-    distances = []
     for trig, echo in zip(ULTRASONIC_OUT_PINS, ULTRASONIC_IN_PINS):
         # Pulse trigger pin
         GPIO.output(trig, HIGH)
@@ -75,24 +79,28 @@ def measureDistance():
         # Stop timer and calculate distance traveled (cm)
         elapsed_t = time.perf_counter() - start_t
         distance = (elapsed_t * SPEED_OF_SOUND) / 2
-        distances.append(distance)
-    return distances
+    return distance
 
 def setMotorDirection(dirs):
     GPIO.output(AIN1, dirs[0])
     GPIO.output(AIN2, dirs[1])
+    GPIO.output(BIN1, dirs[2])
+    GPIO.output(BIN2, dirs[3])
+
 
 def generateTask(cmd):
     if (cmd == "W"):
-        task = [[HIGH, LOW], time.time()]
+        task = [[HIGH, LOW, HIGH, LOW], time.time(), [5, 0]]
     elif (cmd == "S"):
-        task = [[LOW, HIGH], time.time()]
+        task = [[LOW, HIGH, LOW, HIGH], time.time(), [-5, 0]]
     return task
     
 
 def main():
     pwm = GPIOInit()    
     server_socket = wifiInit()
+    pos = [0, 0]
+    angle = 0
     tasks = []
 
     while True:
@@ -104,6 +112,8 @@ def main():
                 if len(tasks) > 0:
                     setMotorDirection(tasks[0][0])
                     tasks[0][1] = time.time() # Update start time
+                    pos[0] += tasks[0][2][0]
+                    angle += tasks[0][2][1]
                 else:
                     pwm.stop()
         
@@ -111,12 +121,18 @@ def main():
         r, w, e = select.select([server_socket], [], [], .01)
         if (r): # If there is data available
             cmd = server_socket.recv(1024).decode()
-            tasks.append(generateTask(cmd))
-            if len(tasks) == 1:
-                setMotorDirection(tasks[0][0])
-                pwm.start(DUTY_CYCLE)
+            if cmd in ["W", "A", "S", "D"]:
+                tasks.append(generateTask(cmd))
+                if len(tasks) == 1:
+                    setMotorDirection(tasks[0][0])
+                    pwm.start(DUTY_CYCLE)
+            elif cmd == "G":
+                dist = measureDistance()
+                point = [pos[0] + dist*math.cos(math.radians(angle)), pos[1] + dist*math.sin(math.radians(angle))]
+                msg = str(point[0]) + "," + str(point[1])
+                server_socket.send(msg.encode())
             print(f"Message Recieved: {cmd}")
-            print(f"Tasks: {tasks}")
+            print(f"Pos: {pos}\nAngle: {angle}")
 
 
 if __name__ == "__main__":
